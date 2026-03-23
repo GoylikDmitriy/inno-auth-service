@@ -1,18 +1,18 @@
-\# Auth Service
+# Auth Service
 
 
 
-Microservice responsible for authentication \& authorization.
+Microservice responsible for authentication & authorization.
 
 
 
-\*\*Key responsibilities:\*\*
+**Key responsibilities:**
 
-\*   User authentication with JWT tokens (access + refresh)
+*   User authentication with JWT tokens (access + refresh)
 
-\*   Role-based access control (Admin / User)
+*   Role-based access control (Admin / User)
 
-\*   Storing user credentials with BCrypt password hashing
+*   Storing user credentials with BCrypt password hashing
 
 
 
