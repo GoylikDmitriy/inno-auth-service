@@ -26,6 +26,8 @@ jobs:
           cache: maven
 
       - name: Test and Build
+        env:
+          JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
         run: mvn verify
 
       - name: SonarCloud Analysis
