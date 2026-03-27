@@ -10,8 +10,10 @@ import com.goylik.auth_service.model.dto.request.SaveCredentialsRequest;
 import com.goylik.auth_service.model.dto.request.ValidateTokenRequest;
 import com.goylik.auth_service.model.dto.response.TokenResponse;
 import com.goylik.auth_service.model.dto.response.TokenValidationResponse;
+import com.goylik.auth_service.model.entity.RefreshToken;
 import com.goylik.auth_service.model.entity.UserCredentials;
 import com.goylik.auth_service.model.enums.Role;
+import com.goylik.auth_service.repository.RefreshTokenRepository;
 import com.goylik.auth_service.repository.UserCredentialsRepository;
 import com.goylik.auth_service.security.jwt.JwtService;
 import com.goylik.auth_service.service.impl.AuthServiceImpl;
@@ -27,6 +29,7 @@ import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -36,6 +39,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
     @Mock private UserCredentialsRepository userCredentialsRepository;
+    @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private AuthenticationManager authenticationManager;
     @Mock private JwtService jwtService;
@@ -43,6 +47,7 @@ class AuthServiceTest {
     @InjectMocks private AuthServiceImpl authService;
 
     private UserCredentials credentials;
+    private RefreshToken refreshToken;
 
     @BeforeEach
     void setUp() {
@@ -53,6 +58,13 @@ class AuthServiceTest {
         credentials.setPassword("hashed_password");
         credentials.setRole(Role.ROLE_USER);
         credentials.setActive(true);
+
+        refreshToken = new RefreshToken();
+        refreshToken.setToken("valid_refresh_token");
+        refreshToken.setId(1L);
+        refreshToken.setRevoked(false);
+        refreshToken.setExpiresAt(LocalDateTime.MAX);
+        refreshToken.setUserId(1L);
     }
 
     @Test
@@ -121,8 +133,10 @@ class AuthServiceTest {
     void refreshToken_shouldReturnNewTokens_WhenRefreshTokenIsValid() {
         RefreshTokenRequest request = new RefreshTokenRequest("valid_refresh_token");
 
-        when(jwtService.extractAll("valid_refresh_token"))
+        when(jwtService.extractAllFromRefreshToken("valid_refresh_token"))
                 .thenReturn(new TokenValidationResponse(true, 10L, Role.ROLE_USER));
+        when(refreshTokenRepository.findByTokenAndRevokedFalse("valid_refresh_token"))
+                .thenReturn(Optional.of(refreshToken));
         when(jwtService.generateAccessToken(10L, Role.ROLE_USER))
                 .thenReturn("new_access_token");
         when(jwtService.generateRefreshToken(10L, Role.ROLE_USER))
@@ -139,7 +153,7 @@ class AuthServiceTest {
     void refreshToken_shouldThrowInvalidTokenException_WhenTokenIsExpired() {
         RefreshTokenRequest request = new RefreshTokenRequest("expired_token");
 
-        when(jwtService.extractAll("expired_token"))
+        when(jwtService.extractAllFromRefreshToken("expired_token"))
                 .thenReturn(new TokenValidationResponse(false, null, null));
 
         assertThrows(
@@ -155,7 +169,7 @@ class AuthServiceTest {
     void validateToken_shouldReturnValidResponse_WhenTokenIsValid() {
         ValidateTokenRequest request = new ValidateTokenRequest("valid_token");
 
-        when(jwtService.extractAll("valid_token"))
+        when(jwtService.extractAllFromAccessToken("valid_token"))
                 .thenReturn(new TokenValidationResponse(true, 10L, Role.ROLE_USER));
 
         TokenValidationResponse result = authService.validateToken(request);
@@ -169,7 +183,7 @@ class AuthServiceTest {
     void validateToken_shouldReturnInvalidResponse_WhenTokenIsInvalid() {
         ValidateTokenRequest request = new ValidateTokenRequest("invalid_token");
 
-        when(jwtService.extractAll("invalid_token"))
+        when(jwtService.extractAllFromAccessToken("invalid_token"))
                 .thenReturn(new TokenValidationResponse(false, null, null));
 
         TokenValidationResponse result = authService.validateToken(request);

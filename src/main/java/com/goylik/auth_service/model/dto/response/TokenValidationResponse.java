@@ -7,4 +7,11 @@ public record TokenValidationResponse(
         Long userId,
         Role role
 ) {
+    public static TokenValidationResponse success(Long userId, Role role) {
+        return new TokenValidationResponse(true, userId, role);
+    }
+
+    public static TokenValidationResponse failure() {
+        return new TokenValidationResponse(false, null, null);
+    }
 }

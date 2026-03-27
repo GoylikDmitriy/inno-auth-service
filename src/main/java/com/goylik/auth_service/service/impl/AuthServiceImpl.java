@@ -4,14 +4,13 @@ import com.goylik.auth_service.exception.CredentialsAlreadyExistException;
 import com.goylik.auth_service.exception.EmailAlreadyExistsException;
 import com.goylik.auth_service.exception.InvalidTokenException;
 import com.goylik.auth_service.exception.UserNotFoundException;
-import com.goylik.auth_service.model.dto.request.LoginRequest;
-import com.goylik.auth_service.model.dto.request.RefreshTokenRequest;
-import com.goylik.auth_service.model.dto.request.SaveCredentialsRequest;
-import com.goylik.auth_service.model.dto.request.ValidateTokenRequest;
+import com.goylik.auth_service.model.dto.request.*;
 import com.goylik.auth_service.model.dto.response.TokenResponse;
 import com.goylik.auth_service.model.dto.response.TokenValidationResponse;
+import com.goylik.auth_service.model.entity.RefreshToken;
 import com.goylik.auth_service.model.entity.UserCredentials;
 import com.goylik.auth_service.model.enums.Role;
+import com.goylik.auth_service.repository.RefreshTokenRepository;
 import com.goylik.auth_service.repository.UserCredentialsRepository;
 import com.goylik.auth_service.security.jwt.JwtService;
 import com.goylik.auth_service.service.AuthService;
@@ -22,10 +21,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
     private final UserCredentialsRepository userCredentialsRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
@@ -39,7 +42,7 @@ public class AuthServiceImpl implements AuthService {
 
         var credentials = fetchUserCredentialsByEmailOrThrow(request.email());
 
-        return buildTokenResponse(credentials.getUserId(), credentials.getRole());
+        return buildTokenResponseWithRefresh(credentials.getUserId(), credentials.getRole());
     }
 
     private UserCredentials fetchUserCredentialsByEmailOrThrow(String email) {
@@ -47,26 +50,51 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new UserNotFoundException("User not registered with email: " + email));
     }
 
-    private TokenResponse buildTokenResponse(Long userId, Role role) {
-        return new TokenResponse(
-                jwtService.generateAccessToken(userId, role),
-                jwtService.generateRefreshToken(userId, role)
-        );
+    private TokenResponse buildTokenResponseWithRefresh(Long userId, Role role) {
+        refreshTokenRepository.revokeAllByUserId(userId);
+
+        String accessToken = jwtService.generateAccessToken(userId, role);
+        String refreshToken = jwtService.generateRefreshToken(userId, role);
+
+        buildRefreshTokenAndSave(userId, refreshToken);
+
+        return new TokenResponse(accessToken, refreshToken);
+    }
+
+    private void buildRefreshTokenAndSave(Long userId, String token) {
+        var tokenEntity = new RefreshToken();
+        tokenEntity.setToken(token);
+        tokenEntity.setUserId(userId);
+        tokenEntity.setExpiresAt(LocalDateTime.now().plus(jwtService.getRefreshTokenExpirationMs(), ChronoUnit.MILLIS));
+        tokenEntity.setRevoked(false);
+        refreshTokenRepository.save(tokenEntity);
     }
 
     @Override
     public TokenResponse refreshToken(RefreshTokenRequest request) {
-        TokenValidationResponse validation = jwtService.extractAll(request.refreshToken());
-        if (!validation.valid()) {
-            throw new InvalidTokenException("Refresh token is invalid or expired");
+        var tokenResponse = jwtService.extractAllFromRefreshToken(request.refreshToken());
+
+        validateRefreshTokenOrThrow(request.refreshToken());
+
+        return buildTokenResponseWithRefresh(tokenResponse.userId(), tokenResponse.role());
+    }
+
+    private void validateRefreshTokenOrThrow(String token) {
+        var storedToken = refreshTokenRepository.findByTokenAndRevokedFalse(token)
+                .orElseThrow(() -> new InvalidTokenException("Refresh token not found"));
+
+        if (storedToken.isRevoked()) {
+            throw new InvalidTokenException("Token revoked");
         }
 
-        return buildTokenResponse(validation.userId(), validation.role());
+        if (storedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new InvalidTokenException("Token expired");
+        }
     }
 
     @Override
     public TokenValidationResponse validateToken(ValidateTokenRequest request) {
-        return jwtService.extractAll(request.token());
+        return jwtService.extractAllFromAccessToken(request.token());
     }
 
     @Override
@@ -93,5 +121,13 @@ public class AuthServiceImpl implements AuthService {
         credentials.setActive(true);
 
         return credentials;
+    }
+
+    @Override
+    @Transactional
+    public void logout(LogoutRequest request) {
+        Long userId = jwtService.extractUserId(request.refreshToken());
+        validateRefreshTokenOrThrow(request.refreshToken());
+        refreshTokenRepository.revokeAllByUserId(userId);
     }
 }

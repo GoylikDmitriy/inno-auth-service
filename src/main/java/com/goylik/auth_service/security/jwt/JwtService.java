@@ -27,31 +27,40 @@ public class JwtService {
     @Value("${app.jwt.clock-skew-seconds:30}")
     private long clockSkewSeconds;
 
+    private static final String ACCESS_TOKEN_TYPE_STRING = "ACCESS";
+    private static final String REFRESH_TOKEN_TYPE_STRING = "REFRESH";
+
     public String generateAccessToken(Long userId, Role role) {
-        return buildToken(userId, role, accessTokenExpirationMs);
+        return buildToken(userId, role, accessTokenExpirationMs, ACCESS_TOKEN_TYPE_STRING);
     }
 
     public String generateRefreshToken(Long userId, Role role) {
-        return buildToken(userId, role, refreshTokenExpirationMs);
+        return buildToken(userId, role, refreshTokenExpirationMs, REFRESH_TOKEN_TYPE_STRING);
     }
 
-    private String buildToken(Long userId, Role role, long expirationMs) {
+    private String buildToken(Long userId, Role role, long expirationMs, String tokenType) {
         return Jwts.builder()
                 .subject(String.valueOf(userId))
-                .claims(Map.of("role", role.name()))
+                .claims(Map.of(
+                        "role", role.name(),
+                        "type", tokenType
+                ))
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs))
                 .signWith(getSigningKey())
                 .compact();
     }
 
-    public boolean isTokenValid(String token) {
-        try {
-            extractAllClaims(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
+    }
+
+    public TokenValidationResponse extractAllFromAccessToken(String token) {
+        return extractAll(token, ACCESS_TOKEN_TYPE_STRING);
+    }
+
+    public TokenValidationResponse extractAllFromRefreshToken(String token) {
+        return extractAll(token, REFRESH_TOKEN_TYPE_STRING);
     }
 
     public Long extractUserId(String token) {
@@ -63,14 +72,18 @@ public class JwtService {
         return Role.valueOf(roleName);
     }
 
-    public TokenValidationResponse extractAll(String token) {
+    private TokenValidationResponse extractAll(String token, String type) {
         try {
             Claims claims = extractAllClaims(token);
-            Long userId = Long.parseLong(claims.getSubject());
-            Role role = Role.valueOf(claims.get("role", String.class));
-            return new TokenValidationResponse(true, userId, role);
+            if (type.equals(claims.get("type", String.class))) {
+                Long userId = Long.parseLong(claims.getSubject());
+                Role role = Role.valueOf(claims.get("role", String.class));
+                return TokenValidationResponse.success(userId, role);
+            }
+
+            return TokenValidationResponse.failure();
         } catch (Exception e) {
-            return new TokenValidationResponse(false, null, null);
+            return TokenValidationResponse.failure();
         }
     }
 

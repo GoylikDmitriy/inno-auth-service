@@ -22,6 +22,9 @@ class AuthControllerTest extends BaseIntegrationTest {
     @Autowired private UserCredentialsRepository userCredentialsRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
+    private static final String INTERNAL_API_KEY = "user-service:key-123123";
+    private static final String INTERNAL_API_KEY_HEADER = "X-Internal-Api-Key";
+
     private static final String BASE_URL = "/api/auth";
 
     private static final String VALID_CREDENTIALS_JSON = """
@@ -42,6 +45,7 @@ class AuthControllerTest extends BaseIntegrationTest {
     void saveCredentials_ShouldReturn201_WhenValidRequest() throws Exception {
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(VALID_CREDENTIALS_JSON))
                 .andExpect(status().isCreated());
 
@@ -52,6 +56,7 @@ class AuthControllerTest extends BaseIntegrationTest {
     void saveCredentials_ShouldHashPassword_BeforeSaving() throws Exception {
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(VALID_CREDENTIALS_JSON))
                 .andExpect(status().isCreated());
 
@@ -65,11 +70,13 @@ class AuthControllerTest extends BaseIntegrationTest {
     void saveCredentials_ShouldReturn409_WhenEmailAlreadyExists() throws Exception {
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(VALID_CREDENTIALS_JSON))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(VALID_CREDENTIALS_JSON))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
@@ -79,6 +86,7 @@ class AuthControllerTest extends BaseIntegrationTest {
     void saveCredentials_ShouldReturn409_WhenUserIdAlreadyExists() throws Exception {
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(VALID_CREDENTIALS_JSON))
                 .andExpect(status().isCreated());
 
@@ -93,6 +101,7 @@ class AuthControllerTest extends BaseIntegrationTest {
 
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(differentEmailSameUserId))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
@@ -111,6 +120,7 @@ class AuthControllerTest extends BaseIntegrationTest {
 
         mockMvc.perform(post(BASE_URL + "/save-credentials")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header(INTERNAL_API_KEY_HEADER, INTERNAL_API_KEY)
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());
     }
