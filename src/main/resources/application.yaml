@@ -26,4 +26,5 @@ app:
     clock-skew-seconds: 30
   internal:
     api-keys:
-      user-service: ${USER_SERVICE_API_KEY}
+      trusted-services:
+        - ${GATEWAY_API_KEY}

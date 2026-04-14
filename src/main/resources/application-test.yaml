@@ -10,4 +10,5 @@ spring:
 app:
   internal:
     api-keys:
-      user-service: user-service:key-123123
+      trusted-services:
+        - gateway:key-312312
