@@ -28,3 +28,4 @@ app:
     api-keys:
       trusted-services:
         - ${GATEWAY_API_KEY}
+        - ${USER_SERVICE_API_KEY}
