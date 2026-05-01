@@ -22,7 +22,7 @@ class AuthControllerTest extends BaseIntegrationTest {
     @Autowired private UserCredentialsRepository userCredentialsRepository;
     @Autowired private PasswordEncoder passwordEncoder;
 
-    private static final String INTERNAL_API_KEY = "user-service:key-123123";
+    private static final String INTERNAL_API_KEY = "gateway:key-312312";
     private static final String INTERNAL_API_KEY_HEADER = "X-Internal-Api-Key";
 
     private static final String BASE_URL = "/api/auth";
